@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Timeline Routes</title>
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR-API-KEY-HEREo&libraries=visualization"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 1em;
+            text-align: center;
+        }
+        main {
+            margin: 1em;
+        }
+        #map {
+            width: 100%;
+            height: 500px;
+        }
+        .filters {
+            margin: 1em 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Google Timeline Routes</h1>
+    </header>
+    <main>
+        <div class="filters">
+            <label for="startDate">Start Date:</label>
+            <input type="date" id="startDate">
+            <label for="endDate">End Date:</label>
+            <input type="date" id="endDate">
+            <button onclick="filterAndPlotRoutes()">Show Routes</button>
+        </div>
+        <div id="map"></div>
+    </main>
+    <script>
+        let jsonData = null;
+        let map = null;
+
+        async function loadData() {
+            try {
+                const response = await fetch("timeline.json");
+                if (!response.ok) {
+                    throw new Error(`Failed to load JSON data: ${response.status}`);
+                }
+                jsonData = await response.json();
+                initMap();
+            } catch (error) {
+                console.error("Error loading JSON data:", error);
+                alert("Failed to load JSON data. Ensure 'timeline.json' exists and is accessible.");
+            }
+        }
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 8,
+                center: { lat: 39.8283, lng: -98.5795 }, // Default center (USA)
+            });
+        }
+
+        function filterAndPlotRoutes() {
+            if (!jsonData) {
+                alert("JSON data not loaded yet!");
+                return;
+            }
+
+            const startDate = document.getElementById("startDate").value;
+            const endDate = document.getElementById("endDate").value;
+
+            if (!startDate || !endDate) {
+                alert("Please select both start and end dates.");
+                return;
+            }
+
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+
+            const routes = [];
+            if (jsonData.semanticSegments && Array.isArray(jsonData.semanticSegments)) {
+                jsonData.semanticSegments.forEach(segment => {
+                    if (segment.timelinePath && Array.isArray(segment.timelinePath)) {
+                        const path = segment.timelinePath.filter(point => {
+                            const pointDate = new Date(point.time);
+                            return pointDate >= start && pointDate <= end;
+                        }).map(point => {
+                            const [lat, lng] = point.point.split(",").map(coord => parseFloat(coord));
+                            return { lat, lng };
+                        });
+
+                        if (path.length > 1) {
+                            routes.push(path);
+                        }
+                    }
+                });
+            }
+
+            plotRoutes(routes);
+        }
+
+        function plotRoutes(routes) {
+            if (map) {
+                map.setZoom(8); // Reset zoom
+                map.setCenter({ lat: 39.8283, lng: -98.5795 }); // Reset center
+
+                routes.forEach(path => {
+                    new google.maps.Polyline({
+                        path: path,
+                        geodesic: true,
+                        strokeColor: "#FF0000",
+                        strokeOpacity: 1.0,
+                        strokeWeight: 2,
+                        map: map,
+                    });
+                });
+
+                if (routes.length > 0) {
+                    const bounds = new google.maps.LatLngBounds();
+                    routes.flat().forEach(point => {
+                        bounds.extend(point);
+                    });
+                    map.fitBounds(bounds);
+                }
+            }
+        }
+
+        window.onload = loadData;
+    </script>
+</body>
+</html>
